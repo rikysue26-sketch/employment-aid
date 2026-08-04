@@ -1,0 +1,266 @@
+// ============================================================
+// 高校毕业生就业精准帮扶 Agent 平台 - 数据模型
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 基础组织架构 ----------
+
+model College {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  majors   Major[]
+  students Student[]
+  users    User[]
+}
+
+model Major {
+  id        String   @id @default(cuid())
+  name      String
+  code      String
+  collegeId String
+  college   College  @relation(fields: [collegeId], references: [id])
+  createdAt DateTime @default(now())
+
+  students Student[]
+}
+
+// ---------- 用户与角色 ----------
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   // admin | counselor | leader
+  collegeId String?
+  college   College? @relation(fields: [collegeId], references: [id])
+  createdAt DateTime @default(now())
+
+  counselorStudents Student[]      @relation("CounselorStudents")
+  tasks             Task[]         @relation("TaskOwner")
+  communications    Communication[]
+  approvals         Approval[]
+  agentLogs         AgentLog[]
+}
+
+// ---------- 学生 ----------
+
+model Student {
+  id              String   @id @default(cuid())
+  studentNo       String   @unique
+  name            String
+  gender          String   // 仅用于基础信息展示，禁止用于风险判断
+  collegeId       String
+  college         College  @relation(fields: [collegeId], references: [id])
+  majorId         String
+  major           Major    @relation(fields: [majorId], references: [id])
+  degreeLevel     String   // bachelor | master | doctor
+  grade           String   // 例 2024届
+  phone           String?
+  email           String?
+  // 就业状态
+  employmentStatus String  // unplaced | employed | postgrad | military | entrepreneurship | abroad
+  statusUpdatedAt  DateTime @default(now())
+  // 求职意向
+  intendedCity    String?
+  intendedSalary  String?  // 例 "8k-12k"
+  intendedRole    String?
+  industryPref    String?
+  // 经济情况：仅用于服务优先级，不用于风险评价
+  financialStatus String?  // normal | difficulty | poverty
+  // 简历
+  resumeText      String?
+  resumeScore     Int?     // 0-100
+  // 技能
+  skills          String   // JSON array
+  // 风险
+  riskLevel       String   @default("none") // none | low | medium | high
+  riskReasons     String?  // JSON array of risk reason objects
+  riskAnalyzedAt  DateTime?
+  inHelpList      Boolean  @default(false)
+  helpListAddedAt DateTime?
+  helpListStatus  String   @default("none") // none | pending | confirmed | rejected
+  helpPriority    Int      @default(0)
+  // 活跃度
+  lastActivityAt  DateTime?
+  activityLevel   String   @default("unknown") // active | normal | inactive | silent
+  // 毕业时间
+  graduateDate    DateTime?
+  // 辅导员
+  counselorId     String?
+  counselor       User?    @relation("CounselorStudents", fields: [counselorId], references: [id])
+  // 备注：标记虚构数据
+  isFictional     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  applications    Application[]
+  interviews      Interview[]
+  communications  Communication[]
+  tasks           Task[]
+  recommendations Recommendation[]
+  helpActions     HelpAction[]
+}
+
+// ---------- 企业与岗位 ----------
+
+model Enterprise {
+  id        String   @id @default(cuid())
+  name      String
+  industry  String?
+  city      String?
+  scale     String?  // 企业规模
+  createdAt DateTime @default(now())
+
+  jobs Job[]
+}
+
+model Job {
+  id            String   @id @default(cuid())
+  enterpriseId  String
+  enterprise    Enterprise @relation(fields: [enterpriseId], references: [id])
+  title         String
+  city          String
+  degreeReq     String   // bachelor | master | doctor
+  majorReq      String?  // 专业要求，逗号分隔
+  skillReq      String?  // 技能要求，JSON array
+  salaryRange   String?
+  deadline      DateTime?
+  headcount     Int      @default(1)
+  status        String   @default("open") // open | closed | filled
+  certReq       String?  // 必要资格证书
+  createdAt     DateTime @default(now())
+
+  applications    Application[]
+  recommendations Recommendation[]
+}
+
+// ---------- 投递、面试 ----------
+
+model Application {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  jobId      String
+  job        Job      @relation(fields: [jobId], references: [id])
+  status     String   @default("submitted") // submitted | viewed | interview | rejected | offered
+  appliedAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+}
+
+model Interview {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  jobId      String?
+  result     String   @default("pending") // pending | passed | failed
+  round      Int      @default(1)
+  date       DateTime @default(now())
+  note       String?
+}
+
+// ---------- 沟通记录 ----------
+
+model Communication {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  counselorId String
+  counselor  User     @relation(fields: [counselorId], references: [id])
+  type       String   // phone | wechat | inperson | email
+  content    String
+  result     String?
+  date       DateTime @default(now())
+}
+
+// ---------- 帮扶任务 ----------
+
+model Task {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id])
+  ownerId       String
+  owner         User     @relation("TaskOwner", fields: [ownerId], references: [id])
+  type          String   // interview | resume | recommend | mock_interview | goal_adjust | follow_up | psych | other
+  priority      String   @default("medium") // low | medium | high | urgent
+  deadline      DateTime?
+  action        String   // 具体行动
+  acceptance    String?  // 验收标准
+  status        String   @default("pending") // pending | in_progress | done | cancelled
+  followUps     String?  // JSON array of follow-up records
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+}
+
+// ---------- 人岗匹配推荐 ----------
+
+model Recommendation {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id])
+  jobId         String
+  job           Job      @relation(fields: [jobId], references: [id])
+  matchScore    Int      // 0-100
+  hardPass      Boolean
+  matchedItems  String   // JSON
+  unmatchedItems String  // JSON
+  hardCheck     String   // JSON
+  reason        String
+  gaps          String?  // JSON
+  suggestApply  Boolean  @default(true)
+  status        String   @default("pending") // pending | confirmed | excluded | queued
+  messageDraft  String?
+
+  messageStatus String   @default("none") // none | draft | approved | sent
+  createdAt     DateTime @default(now())
+
+  @@unique([studentId, jobId])
+}
+
+// ---------- Agent日志 ----------
+
+model AgentLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  taskType   String   // risk_analysis | match_jobs | agent_task | resume_advice | comm_outline | report
+  target     String?  // 操作对象描述
+  steps      String   // JSON array of step objects
+  summary    String?
+  status     String   @default("running") // running | done | failed
+  createdAt  DateTime @default(now())
+}
+
+// ---------- 审批记录 ----------
+
+model Approval {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  agentLogId String?
+  type       String   // help_list | message | task_batch
+  targetId   String?  // 关联对象ID
+  decision   String   // approved | rejected
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+// ---------- 帮扶动作记录 ----------
+
+model HelpAction {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  action     String
+  detail     String?
+  createdAt  DateTime @default(now())
+}
