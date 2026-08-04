@@ -107,21 +107,8 @@ const jobTemplates = [
 async function main() {
   console.log("开始生成模拟数据...");
 
-  // 清空
-  await prisma.helpAction.deleteMany();
-  await prisma.approval.deleteMany();
-  await prisma.agentLog.deleteMany();
-  await prisma.recommendation.deleteMany();
-  await prisma.task.deleteMany();
-  await prisma.communication.deleteMany();
-  await prisma.interview.deleteMany();
-  await prisma.application.deleteMany();
-  await prisma.job.deleteMany();
-  await prisma.enterprise.deleteMany();
-  await prisma.student.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.major.deleteMany();
-  await prisma.college.deleteMany();
+  // 清空 - use raw SQL for CASCADE
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "HelpAction", "Approval", "AgentLog", "Recommendation", "Task", "Communication", "Interview", "Application", "Job", "Enterprise", "Student", "User", "Major", "College" CASCADE;');
   console.log("已清空旧数据");
 
   // ---- 学院和专业 ----
